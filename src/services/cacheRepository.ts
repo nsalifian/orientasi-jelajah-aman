@@ -29,68 +29,97 @@ export async function simpanCache(
   cuaca: DataCuacaLengkap,
   kualitasUdara: DataKualitasUdara
 ): Promise<void> {
-  const db = await ambilDatabase();
-  await db.runAsync(
-    `INSERT OR REPLACE INTO cache_cuaca
-     (kunci, kota_id, nama_kota, latitude, longitude, cuaca_json, aqi_json, disimpan_pada)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      buatKunci(kota.latitude, kota.longitude),
-      kota.id,
-      kota.nama,
-      kota.latitude,
-      kota.longitude,
-      JSON.stringify(cuaca),
-      JSON.stringify(kualitasUdara),
-      Date.now(),
-    ]
-  );
+  try {
+    const db = await ambilDatabase();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO cache_cuaca
+       (kunci, kota_id, nama_kota, latitude, longitude, cuaca_json, aqi_json, disimpan_pada)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        buatKunci(kota.latitude, kota.longitude),
+        kota.id,
+        kota.nama,
+        kota.latitude,
+        kota.longitude,
+        JSON.stringify(cuaca),
+        JSON.stringify(kualitasUdara),
+        Date.now(),
+      ]
+    );
+  } catch {
+    // Di web, SQLite tidak tersedia - abaikan, tidak kritikal
+  }
 }
 
 export async function ambilCache(
   latitude: number,
   longitude: number
 ): Promise<DataTersimpan | null> {
-  const db = await ambilDatabase();
-  const baris = await db.getFirstAsync<BarisCache>(
-    "SELECT * FROM cache_cuaca WHERE kunci = ?",
-    [buatKunci(latitude, longitude)]
-  );
+  try {
+    const db = await ambilDatabase();
+    const baris = await db.getFirstAsync<BarisCache>(
+      "SELECT * FROM cache_cuaca WHERE kunci = ?",
+      [buatKunci(latitude, longitude)]
+    );
 
-  if (!baris) return null;
+    if (!baris) return null;
 
-  return {
-    cuaca: JSON.parse(baris.cuaca_json) as DataCuacaLengkap,
-    kualitasUdara: JSON.parse(baris.aqi_json) as DataKualitasUdara,
-    disimpanPada: baris.disimpan_pada,
-  };
+    return {
+      cuaca: JSON.parse(baris.cuaca_json) as DataCuacaLengkap,
+      kualitasUdara: JSON.parse(baris.aqi_json) as DataKualitasUdara,
+      disimpanPada: baris.disimpan_pada,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function daftarKotaTersimpan(): Promise<RingkasanKotaTersimpan[]> {
-  const db = await ambilDatabase();
-  const semua = await db.getAllAsync<BarisRingkasan>(
-    `SELECT kunci, kota_id, nama_kota, latitude, longitude, disimpan_pada
-     FROM cache_cuaca ORDER BY disimpan_pada DESC LIMIT 5`
-  );
+  try {
+    const db = await ambilDatabase();
+    const semua = await db.getAllAsync<BarisRingkasan>(
+      `SELECT kunci, kota_id, nama_kota, latitude, longitude, disimpan_pada
+       FROM cache_cuaca ORDER BY disimpan_pada DESC LIMIT 5`
+    );
 
-  return semua.map((b) => ({
-    kunci: b.kunci,
-    id: b.kota_id,
-    nama: b.nama_kota,
-    latitude: b.latitude,
-    longitude: b.longitude,
-    disimpanPada: b.disimpan_pada,
-  }));
+    return semua.map((b) => ({
+      kunci: b.kunci,
+      id: b.kota_id,
+      nama: b.nama_kota,
+      latitude: b.latitude,
+      longitude: b.longitude,
+      disimpanPada: b.disimpan_pada,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function bersihkanCacheLama(batasUmurMs: number): Promise<void> {
-  const db = await ambilDatabase();
-  await db.runAsync("DELETE FROM cache_cuaca WHERE disimpan_pada < ?", [
-    Date.now() - batasUmurMs,
-  ]);
+  try {
+    const db = await ambilDatabase();
+    await db.runAsync("DELETE FROM cache_cuaca WHERE disimpan_pada < ?", [
+      Date.now() - batasUmurMs,
+    ]);
+  } catch {
+    // Diabaikan di web
+  }
 }
 
 export async function hapusSemuaCache(): Promise<void> {
-  const db = await ambilDatabase();
-  await db.runAsync("DELETE FROM cache_cuaca");
+  try {
+    const db = await ambilDatabase();
+    await db.runAsync("DELETE FROM cache_cuaca");
+  } catch {
+    // Diabaikan di web
+  }
+}
+
+export async function hapusCache(kunci: string): Promise<void> {
+  try {
+    const db = await ambilDatabase();
+    await db.runAsync("DELETE FROM cache_cuaca WHERE kunci = ?", [kunci]);
+  } catch {
+    // Diabaikan di web
+  }
 }
